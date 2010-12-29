@@ -1,0 +1,76 @@
+#!/bin/bash
+#
+# Change user's username
+# 
+# This does not change db usernames because they might not have db users,
+# also their username might be a system db user 
+# aka dude can my username be net_user?
+#
+# Oh, and by the way this is tracked with git - please commit appropriately!
+#
+# 12/2010 - worr 	Original version
+
+if [[ $# -ne 2 ]]; then
+	echo "Usage: $0 <old username> <new username>"
+	exit 1
+fi
+
+
+# Let's do some prep work
+echo -n "kadmin username: "
+read KADMIN_USER
+
+OLD_USERNAME=$1
+NEW_USERNAME=$2
+
+OLD_HOMEDIR=$(ypmatch $OLD_USERNAME passwd | cut -d: -f6)
+NEW_HOMDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
+OLD_KERB5_PRINC="$OLD_USERNAME@CSH.RIT.EDU"
+NEW_KERB5_PRINC="$NEW_USERNAME@CSH.RIT.EDU"
+
+LDAP_SERVER="ldap.csh.rit.edu"
+KADMIN_CMD="/usr/bin/kadmin -p $KADMIN_USER/admin -q "
+LOG_FILE="change_username.log"
+VERIFICATION="Yes, I understand that what I'm doing can break everything for $OLD_USERNAME"
+
+echo "Changing $OLD_USERNAME TO $NEW_USERNAME..." | tee -a $LOG_FILE
+echo "THIS CAN BREAK EVERYTHING OMG ARE YOU SURE YOU WANT TO DO THIS?"
+echo "Enter \"$VERIFICATION\" to continue"
+echo -n "Prompt: "
+read VERIPROMPT
+
+if [[ $VERIFICATION != $VERIPROMPT ]]; then
+	echo "Exiting..." | tee -a $LOG_FILE
+	exit 0
+fi
+
+change_ldap_entry () {
+	echo "Changing LDAP information..." | tee -a $LOG_FILE
+
+	echo "dn: uid=$OLD_USERNAME,ou=Users,dc=csh,dc=rit,dc=edu
+changetype: modrdn
+newrdn: uid=$NEW_USERNAME
+deleteoldrdn: 1
+
+dn: uid=$NEW_USERNAME,ou=Users,dc=csh,dc=rit,dc=edu
+changetype: modify
+replace: homeDirectory
+homeDirectory: /users/u18/$NEW_USERNAME
+-
+replace: krb5PrincipalName
+krb5PrincipalName: $NEW_USERNAME@CSH.RIT.EDU
+-
+delete: mail
+mail: $OLD_USERNAME@csh.rit.edu
+-
+add: mail
+mail: $NEW_USERNAME@csh.rit.edu" | ldapmodify -Q -h $LDAP_SERVER
+
+}
+
+change_krb5_entry () {
+	echo "Changing kerberos princ..." | tee -a $LOG_FILE
+	$KADMIN_CMD "modprinc -expire now $OLD_USERNAME"
+	$KADMIN_CMD "delprinc -force $OLD_USERNAME"
+	$KADMIN_CMD "ank $NEW_USERNAME"
+}
