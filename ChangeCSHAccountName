@@ -15,13 +15,23 @@ if [[ $# -ne 2 ]]; then
 	exit 1
 fi
 
-
-# Let's do some prep work
-echo -n "kadmin username: "
-read KADMIN_USER
-
 OLD_USERNAME=$1
 NEW_USERNAME=$2
+
+id $NEW_USERNAME
+if [[ $? -eq 0 ]]; then
+	echo "New username $NEW_USERNAME already exists!"
+	exit 1
+fi
+
+id $OLD_USERNAME
+if [[ $? -ne 0 ]]; then
+	echo "Old username $OLD_USERNAME does not exist!"
+	exit 1
+fi
+
+echo -n "kadmin username: "
+read KADMIN_USER
 
 OLD_HOMEDIR=$(ypmatch $OLD_USERNAME passwd | cut -d: -f6)
 NEW_HOMDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
@@ -43,6 +53,8 @@ if [[ $VERIFICATION != $VERIPROMPT ]]; then
 	echo "Exiting..." | tee -a $LOG_FILE
 	exit 0
 fi
+
+echo "Verification given. Proceeding with change." | tee -a $LOG_FILE
 
 change_ldap_entry () {
 	echo "Changing LDAP information..." | tee -a $LOG_FILE
@@ -66,6 +78,10 @@ mail: $OLD_USERNAME@csh.rit.edu
 add: mail
 mail: $NEW_USERNAME@csh.rit.edu" | ldapmodify -Q -h $LDAP_SERVER
 
+	if [[ $? -ne 0 ]]; then
+		return 1
+	fi
+
 }
 
 change_krb5_entry () {
@@ -73,4 +89,8 @@ change_krb5_entry () {
 	$KADMIN_CMD "modprinc -expire now $OLD_USERNAME"
 	$KADMIN_CMD "delprinc -force $OLD_USERNAME"
 	$KADMIN_CMD "ank $NEW_USERNAME"
+
+	if [[ $? -ne 0 ]]; then
+		return 1
+	fi
 }
