@@ -79,8 +79,11 @@ add: mail
 mail: $NEW_USERNAME@csh.rit.edu" | ldapmodify -Q -h $LDAP_SERVER
 
 	if [[ $? -ne 0 ]]; then
+		echo "Couldn't change LDAP princ. Exiting..." | tee -a $LOG_FILE
 		return 1
 	fi
+
+	echo "Successfully changed LDAP entry" | tee -a $LOG_FILE
 
 }
 
@@ -91,6 +94,29 @@ change_krb5_entry () {
 	$KADMIN_CMD "ank $NEW_USERNAME"
 
 	if [[ $? -ne 0 ]]; then
+		echo "Couldn't change krb5 princ, exiting..." | tee -a $LOG_FILE
 		return 1
 	fi
+
+	echo "Successfully changed krb5 princ" | tee -a $LOG_FILE
 }
+
+move_home_directory () {
+	echo "Moving home directory..."
+	if [[ -d $NEW_HOMDIR ]]; then
+		echo "$NEW_HOMDIR already exists!?" | tee -a $LOG_FILE
+		return 1
+	fi
+
+	mv $OLD_HOMEDIR $NEW_HOMDIR
+
+
+	if [[ $? -ne 0 ]]; then
+		echo "Couldn't move home directory..." | tee -a $LOG_FILE
+		return 1
+	fi
+
+	echo "Successfully moved home directory"
+}
+
+move_home_directory
