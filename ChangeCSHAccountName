@@ -22,11 +22,11 @@ fi
 OLD_USERNAME=$1
 NEW_USERNAME=$2
 
-id $NEW_USERNAME
-if [[ $? -eq 0 ]]; then
-	echo "New username $NEW_USERNAME already exists!"
-	exit 1
-fi
+# id $NEW_USERNAME
+#if [[ $? -eq 0 ]]; then
+	#echo "New username $NEW_USERNAME already exists!"
+	#exit 1
+#fi
 
 id $OLD_USERNAME
 if [[ $? -ne 0 ]]; then
@@ -43,6 +43,7 @@ OLD_KERB5_PRINC="$OLD_USERNAME@CSH.RIT.EDU"
 NEW_KERB5_PRINC="$NEW_USERNAME@CSH.RIT.EDU"
 OLD_WIKINAME=$(perl -e 'print ucfirst($OLD_USERNAME);') # Hahaha, using Perl for this shit #overkill
 NEW_WIKINAME=$(perl -e 'print ucfirst($NEW_USERNAME);')
+NIS_MAKE='ssh nis1 /root/ldap2nis/ldap2nis.sh'
 
 LDAP_SERVER="ldap.csh.rit.edu"
 KADMIN_CMD="/usr/bin/kadmin -p $KADMIN_USER/admin -q "
@@ -54,6 +55,8 @@ echo "THIS CAN BREAK EVERYTHING OMG ARE YOU SURE YOU WANT TO DO THIS?"
 echo "Enter \"$VERIFICATION\" to continue"
 echo -n "Prompt: "
 read VERIPROMPT
+
+kinit "$KADMIN_USER/admin"
 
 if [[ $VERIFICATION != $VERIPROMPT ]]; then
 	echo "Exiting..." | tee -a $LOG_FILE
@@ -83,7 +86,8 @@ mail: $OLD_USERNAME@csh.rit.edu
 -
 add: mail
 mail: $NEW_USERNAME@csh.rit.edu" | ldapmodify -Q -h $LDAP_SERVER
-
+	
+	$NIS_MAKE
 	echo "Successfully changed LDAP entry" | tee -a $LOG_FILE
 
 }
@@ -109,11 +113,12 @@ move_home_directory () {
 }
 
 change_db_entries () {
-	echo "You will be prompted once for the root db password, and then start's net_user password. Steel yourself."
+	echo "You will be prompted twice for the root db password, and then start's net_user password. Steel yourself."
 
 	# Change wiki username
 	echo "Changing wiki username..." | tee -a $LOG_FILE
 	mysql -u root -p wikidb -e "UPDATE user SET user_name = '$NEW_WIKINAME' WHERE user_name = '$OLD_WIKINAME';" -h db
+	mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
 	echo "Successfully changed wiki username" | tee -a $LOG_FILE
 
 	echo "Changing username in start..." | tee -a $LOG_FILE
