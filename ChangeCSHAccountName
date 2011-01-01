@@ -130,3 +130,15 @@ change_ldap_entry
 change_krb5_entry
 move_home_directory
 change_db_entries
+
+cat <<EOF
+
+Hey, so now you might want to check with the user and see if they want to have
+a mail alias redirecting mail from their old username to their new username.
+
+You also might wanna check mailing list subscriptions, as well as DB accounts,
+and see if their username needs to be changed anywhere else.
+
+No srsly, ask them.
+
+EOF
