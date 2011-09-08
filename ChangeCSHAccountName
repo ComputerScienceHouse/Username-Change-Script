@@ -22,11 +22,11 @@ fi
 OLD_USERNAME=$1
 NEW_USERNAME=$2
 
-# id $NEW_USERNAME
-#if [[ $? -eq 0 ]]; then
-	#echo "New username $NEW_USERNAME already exists!"
-	#exit 1
-#fi
+ id $NEW_USERNAME
+if [[ $? -eq 0 ]]; then
+	echo "New username $NEW_USERNAME already exists!"
+	exit 1
+fi
 
 id $OLD_USERNAME
 if [[ $? -ne 0 ]]; then
@@ -38,7 +38,7 @@ echo -n "kadmin username: "
 read KADMIN_USER
 
 OLD_HOMEDIR=$(ypmatch $OLD_USERNAME passwd | cut -d: -f6)
-NEW_HOMDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
+NEW_HOMEDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
 OLD_KERB5_PRINC="$OLD_USERNAME@CSH.RIT.EDU"
 NEW_KERB5_PRINC="$NEW_USERNAME@CSH.RIT.EDU"
 OLD_WIKINAME=$(perl -e 'print ucfirst($OLD_USERNAME);') # Hahaha, using Perl for this shit #overkill
@@ -55,8 +55,6 @@ echo "THIS CAN BREAK EVERYTHING OMG ARE YOU SURE YOU WANT TO DO THIS?"
 echo "Enter \"$VERIFICATION\" to continue"
 echo -n "Prompt: "
 read VERIPROMPT
-
-kinit "$KADMIN_USER/admin"
 
 if [[ $VERIFICATION != $VERIPROMPT ]]; then
 	echo "Exiting..." | tee -a $LOG_FILE
@@ -102,12 +100,12 @@ change_krb5_entry () {
 
 move_home_directory () {
 	echo "Moving home directory..." | tee -a $LOG_FILE
-	if [[ -d $NEW_HOMDIR ]]; then
-		echo "$NEW_HOMDIR already exists!?" | tee -a $LOG_FILE
+	if [[ -d $NEW_HOMEDIR ]]; then
+		echo "$NEW_HOMEDIR already exists!?" | tee -a $LOG_FILE
 		return 1
 	fi
 
-	mv $OLD_HOMEDIR $NEW_HOMDIR
+	mv $OLD_HOMEDIR $NEW_HOMEDIR
 
 	echo "Successfully moved home directory" | tee -a $LOG_FILE
 }
@@ -121,9 +119,10 @@ change_db_entries () {
 	mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
 	echo "Successfully changed wiki username" | tee -a $LOG_FILE
 
-	echo "Changing username in start..." | tee -a $LOG_FILE
-	psql -U net_user -c "UPDATE hosts SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db network
-	echo "Successfully changed start username" | tee -a $LOG_FILE
+	# START IS GONE - worr 9/7/11
+	#echo "Changing username in start..." | tee -a $LOG_FILE
+	#psql -U net_user -c "UPDATE hosts SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db network
+	#echo "Successfully changed start username" | tee -a $LOG_FILE
 }
 
 change_ldap_entry
