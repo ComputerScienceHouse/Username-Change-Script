@@ -10,10 +10,6 @@
 #
 # 12/2010 - worr 	Original version
 
-# Exits on non-zero line
-# Thanks Russ! That's pretty baller
-set -e
-
 if [[ $# -ne 2 ]]; then
 	echo "Usage: $0 <old username> <new username>"
 	exit 1
@@ -22,7 +18,7 @@ fi
 OLD_USERNAME=$1
 NEW_USERNAME=$2
 
- id $NEW_USERNAME
+id $NEW_USERNAME 2> /dev/null
 if [[ $? -eq 0 ]]; then
 	echo "New username $NEW_USERNAME already exists!"
 	exit 1
@@ -37,8 +33,10 @@ fi
 echo -n "kadmin username: "
 read KADMIN_USER
 
+# TODO: Fix these
 OLD_HOMEDIR=$(ypmatch $OLD_USERNAME passwd | cut -d: -f6)
 NEW_HOMEDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
+
 OLD_KERB5_PRINC="$OLD_USERNAME@CSH.RIT.EDU"
 NEW_KERB5_PRINC="$NEW_USERNAME@CSH.RIT.EDU"
 OLD_WIKINAME=$(perl -e 'print ucfirst($OLD_USERNAME);') # Hahaha, using Perl for this shit #overkill
@@ -56,10 +54,10 @@ echo "Enter \"$VERIFICATION\" to continue"
 echo -n "Prompt: "
 read VERIPROMPT
 
-if [[ $VERIFICATION != $VERIPROMPT ]]; then
-	echo "Exiting..." | tee -a $LOG_FILE
-	exit 0
-fi
+#if [[ $VERIFICATION != $VERIPROMPT ]]; then
+#	echo "Exiting..." | tee -a $LOG_FILE
+	#exit 0
+#fi
 
 echo "Verification given. Proceeding with change." | tee -a $LOG_FILE
 
@@ -111,18 +109,37 @@ move_home_directory () {
 }
 
 change_db_entries () {
-	echo "You will be prompted twice for the root db password, and then start's net_user password. Steel yourself."
+	echo "You will be prompted twice for the root db password. Steel yourself."
 
 	# Change wiki username
 	echo "Changing wiki username..." | tee -a $LOG_FILE
-	mysql -u root -p wikidb -e "UPDATE user SET user_name = '$NEW_WIKINAME' WHERE user_name = '$OLD_WIKINAME';" -h db
-	mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
-	echo "Successfully changed wiki username" | tee -a $LOG_FILE
+	#mysql -u root -p wikidb -e "UPDATE user SET user_name = '$NEW_WIKINAME' WHERE user_name = '$OLD_WIKINAME';" -h db
+	if [[ $? -ne 0 ]]; then
+		echo "Could not change wiki username" | tee -a $LOG_FILE
+	fi
+	#mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
+	if [[ $? -ne 0 ]]; then
+		echo "Could not change wiki username" | tee -a $LOG_FILE
+	else
+		echo "Probably successfully changed wiki username" | tee -a $LOG_FILE
+	fi
 
-	# START IS GONE - worr 9/7/11
-	#echo "Changing username in start..." | tee -a $LOG_FILE
-	#psql -U net_user -c "UPDATE hosts SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db network
-	#echo "Successfully changed start username" | tee -a $LOG_FILE
+	echo "Changing webnews username..." | tee -a $LOG_FILE
+	mysql -u root -p webnews -e "UPDATE users SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db
+	if [[ $? -ne 0 ]]; then
+		echo "Could not change webnews username" | tee -a $LOG_FILE
+	else
+		echo "Successfully changed webnews username" | tee -a $LOG_FILE
+	fi
+
+	echo "Changing impule username..." | tee -a $LOG_FILE
+	mysql -u root -p impulse -e "UPDATE systems SET owner = '$NEW_USERNAME' WHERE owner = '$OLD_USERNAME';" -h db
+	if [[ $? -ne 0 ]]; then
+		echo "Could not change impulse username" | tee -a $LOG_FILE
+	else
+		echo "Successfully changed impulse username" | tee -a $LOG_FILE
+	fi
+
 }
 
 change_ldap_entry
