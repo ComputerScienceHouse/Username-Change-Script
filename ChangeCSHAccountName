@@ -34,14 +34,14 @@ echo -n "kadmin username: "
 read KADMIN_USER
 
 # TODO: Fix these
-OLD_HOMEDIR=$(ypmatch $OLD_USERNAME passwd | cut -d: -f6)
+OLD_HOMEDIR=$(echo ~$OLD_USERNAME)
 NEW_HOMEDIR=$(echo $OLD_HOMEDIR | sed -e "s/$OLD_USERNAME/$NEW_USERNAME/")
 
 OLD_KERB5_PRINC="$OLD_USERNAME@CSH.RIT.EDU"
 NEW_KERB5_PRINC="$NEW_USERNAME@CSH.RIT.EDU"
 OLD_WIKINAME=$(perl -e 'print ucfirst($OLD_USERNAME);') # Hahaha, using Perl for this shit #overkill
 NEW_WIKINAME=$(perl -e 'print ucfirst($NEW_USERNAME);')
-NIS_MAKE='ssh nis1 /root/ldap2nis/ldap2nis.sh'
+#NIS_MAKE='ssh nis1 /root/ldap2nis/ldap2nis.sh'
 
 LDAP_SERVER="ldap.csh.rit.edu"
 KADMIN_CMD="/usr/bin/kadmin -p $KADMIN_USER/admin -q "
@@ -54,10 +54,10 @@ echo "Enter \"$VERIFICATION\" to continue"
 echo -n "Prompt: "
 read VERIPROMPT
 
-#if [[ $VERIFICATION != $VERIPROMPT ]]; then
-#	echo "Exiting..." | tee -a $LOG_FILE
-	#exit 0
-#fi
+if [[ $VERIFICATION != $VERIPROMPT ]]; then
+	echo "Exiting..." | tee -a $LOG_FILE
+	exit 1
+fi
 
 echo "Verification given. Proceeding with change." | tee -a $LOG_FILE
 
@@ -72,10 +72,13 @@ deleteoldrdn: 1
 dn: uid=$NEW_USERNAME,ou=Users,dc=csh,dc=rit,dc=edu
 changetype: modify
 replace: homeDirectory
-homeDirectory: /users/u18/$NEW_USERNAME
+homeDirectory: $NEW_HOMEDIR
 -
 replace: krb5PrincipalName
 krb5PrincipalName: $NEW_USERNAME@CSH.RIT.EDU
+-
+replace: userPassword
+userPassword: {SASL}$NEW_USERNAME@CSH.RIT.EDU
 -
 delete: mail
 mail: $OLD_USERNAME@csh.rit.edu
@@ -83,7 +86,7 @@ mail: $OLD_USERNAME@csh.rit.edu
 add: mail
 mail: $NEW_USERNAME@csh.rit.edu" | ldapmodify -Q -h $LDAP_SERVER
 	
-	$NIS_MAKE
+#	$NIS_MAKE
 	echo "Successfully changed LDAP entry" | tee -a $LOG_FILE
 
 }
@@ -113,11 +116,11 @@ change_db_entries () {
 
 	# Change wiki username
 	echo "Changing wiki username..." | tee -a $LOG_FILE
-	#mysql -u root -p wikidb -e "UPDATE user SET user_name = '$NEW_WIKINAME' WHERE user_name = '$OLD_WIKINAME';" -h db
+	mysql -u root -p wikidb -e "UPDATE user SET user_name = '$NEW_WIKINAME' WHERE user_name = '$OLD_WIKINAME';" -h db
 	if [[ $? -ne 0 ]]; then
 		echo "Could not change wiki username" | tee -a $LOG_FILE
 	fi
-	#mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
+	mysql -u root -p wikidb -e "UPDATE page SET page_title = '$NEW_WIKINAME' WHERE page_title = '$OLD_WIKINAME';" -h db
 	if [[ $? -ne 0 ]]; then
 		echo "Could not change wiki username" | tee -a $LOG_FILE
 	else
@@ -125,7 +128,7 @@ change_db_entries () {
 	fi
 
 	echo "Changing webnews username..." | tee -a $LOG_FILE
-	mysql -u root -p webnews -e "UPDATE users SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db
+	#mysql -u root -p webnews -e "UPDATE users SET username = '$NEW_USERNAME' WHERE username = '$OLD_USERNAME';" -h db
 	if [[ $? -ne 0 ]]; then
 		echo "Could not change webnews username" | tee -a $LOG_FILE
 	else
@@ -133,7 +136,8 @@ change_db_entries () {
 	fi
 
 	echo "Changing impule username..." | tee -a $LOG_FILE
-	mysql -u root -p impulse -e "UPDATE systems SET owner = '$NEW_USERNAME' WHERE owner = '$OLD_USERNAME';" -h db
+	#psql -h db.csh.rit.edu -p 5432 -U impulse_admin -c "select api.initialize('root'); select api.change_username($OLD_USERNAME, $NEW_USERNAME)" impulse --quiet 
+	#mysql -u root -p impulse -e "UPDATE systems SET owner = '$NEW_USERNAME' WHERE owner = '$OLD_USERNAME';" -h db
 	if [[ $? -ne 0 ]]; then
 		echo "Could not change impulse username" | tee -a $LOG_FILE
 	else
